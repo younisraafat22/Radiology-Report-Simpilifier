@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.schemas import ImageExtractResponse, SimplifyRequest, SimplifyResponse
 from app.services.quality import evaluate_output_quality
-from app.services.safety import sanitize_report_text, validate_report_text
+from app.services.safety import is_likely_radiology_report, sanitize_report_text, validate_report_text
 from app.services.simplifier import LLMServiceError, simplify_report
 from app.services.vlm_extractor import VLMServiceError, extract_text_from_image
 
@@ -36,6 +36,12 @@ def simplify(payload: SimplifyRequest) -> SimplifyResponse:
         raise HTTPException(status_code=400, detail=reason)
 
     sanitized_text = sanitize_report_text(payload.report_text)
+    if not is_likely_radiology_report(sanitized_text):
+        raise HTTPException(
+            status_code=400,
+            detail="Input does not appear to be a radiology report. Please submit radiology text only.",
+        )
+
     try:
         simplified_text, bullet_points, glossary, confidence, model_source = simplify_report(sanitized_text)
     except LLMServiceError as exc:

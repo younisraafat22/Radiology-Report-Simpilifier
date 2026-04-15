@@ -53,11 +53,27 @@ def test_simplify_endpoint_returns_503_on_llm_failure(monkeypatch) -> None:
     monkeypatch.setattr("app.main.simplify_report", fake_failure)
 
     payload = {
-        "report_text": "FINDINGS: Possible left basilar infiltrate. Cannot exclude early pneumonia.",
+        "report_text": (
+            "FINDINGS: Possible left basilar infiltrate. Cannot exclude early pneumonia. "
+            "IMPRESSION: Follow-up chest x-ray recommended."
+        ),
     }
 
     response = client.post("/api/v1/simplify", json=payload)
     assert response.status_code == 503
+
+
+def test_simplify_endpoint_rejects_non_radiology_text() -> None:
+    payload = {
+        "report_text": (
+            "Business performance update: this quarter revenue increased by 12 percent "
+            "and operating margins improved across the retail segment."
+        )
+    }
+
+    response = client.post("/api/v1/simplify", json=payload)
+    assert response.status_code == 400
+    assert "does not appear to be a radiology report" in response.json()["detail"]
 
 
 def test_extract_text_endpoint_success(monkeypatch) -> None:

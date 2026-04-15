@@ -1,4 +1,4 @@
-from app.services.safety import sanitize_report_text, validate_report_text
+from app.services.safety import is_likely_radiology_report, sanitize_report_text, validate_report_text
 
 
 def test_validate_report_text_rejects_short_input() -> None:
@@ -19,3 +19,13 @@ def test_sanitize_report_text_redacts_mrn() -> None:
     redacted = sanitize_report_text(raw)
     assert "MRN" not in redacted.upper()
     assert "[REDACTED]" in redacted
+
+
+def test_is_likely_radiology_report_true_for_radiology_terms() -> None:
+    text = "FINDINGS: Mild bibasilar atelectasis. IMPRESSION: No pleural effusion."
+    assert is_likely_radiology_report(text) is True
+
+
+def test_is_likely_radiology_report_false_for_non_radiology_text() -> None:
+    text = "Quarterly business report: revenue grew 12 percent and costs decreased."
+    assert is_likely_radiology_report(text) is False

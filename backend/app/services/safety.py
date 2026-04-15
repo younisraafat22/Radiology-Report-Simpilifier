@@ -12,6 +12,21 @@ PHI_PATTERNS = [
     re.compile(r"\bMRN[:\s]*\w+\b", re.IGNORECASE),
 ]
 
+RADIOLOGY_HINTS = {
+    "radiology",
+    "x-ray",
+    "xray",
+    "ct",
+    "mri",
+    "ultrasound",
+    "findings",
+    "impression",
+    "pneumothorax",
+    "pleural",
+    "consolidation",
+    "atelectasis",
+}
+
 
 def validate_report_text(report_text: str) -> tuple[bool, str]:
     cleaned = report_text.strip()
@@ -32,3 +47,9 @@ def sanitize_report_text(report_text: str) -> str:
         sanitized = pattern.sub("[REDACTED]", sanitized)
 
     return sanitized
+
+
+def is_likely_radiology_report(report_text: str) -> bool:
+    lowered = report_text.lower()
+    matches = sum(1 for hint in RADIOLOGY_HINTS if hint in lowered)
+    return matches >= 2
