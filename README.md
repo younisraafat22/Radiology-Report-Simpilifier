@@ -72,7 +72,8 @@ Public-facing AI app to simplify de-identified radiology reports into patient-fr
    1. Import `frontend/` as a Vercel project.
    2. Framework preset: `Next.js`.
    3. Set environment variable in Vercel:
-      - `NEXT_PUBLIC_API_BASE_URL=https://<your-fly-app>.fly.dev`
+      - `BACKEND_API_BASE_URL=https://<your-fly-app>.fly.dev`
+      - (optional) `NEXT_PUBLIC_API_BASE_URL=https://<your-fly-app>.fly.dev`
    4. Deploy.
    5. Verify frontend:
       - Open the Vercel URL and submit a sample report.
@@ -86,7 +87,7 @@ Public-facing AI app to simplify de-identified radiology reports into patient-fr
 
    ## Troubleshooting: Failed to fetch
    1. Confirm frontend env value:
-      - `NEXT_PUBLIC_API_BASE_URL=https://<your-fly-app>.fly.dev`
+      - `BACKEND_API_BASE_URL=https://<your-fly-app>.fly.dev`
    2. Confirm backend CORS env value:
       - `CORS_ALLOW_ORIGINS=https://<your-vercel-domain>`
    3. Confirm backend is healthy:
