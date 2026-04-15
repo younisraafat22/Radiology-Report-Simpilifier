@@ -21,9 +21,6 @@ export function ResultPanel({ result }: ResultPanelProps) {
       <span className="badge" style={{ marginLeft: 8 }}>
         Readability Grade: {result.readability_grade_level}
       </span>
-      <span className="badge" style={{ marginLeft: 8 }}>
-        Source: {result.model_source}
-      </span>
 
       <p style={{ marginTop: 12 }}>{result.simplified_report}</p>
 
