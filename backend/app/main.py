@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.schemas import SimplifyRequest, SimplifyResponse
@@ -7,6 +8,17 @@ from app.services.safety import sanitize_report_text, validate_report_text
 from app.services.simplifier import LLMServiceError, simplify_report
 
 app = FastAPI(title=settings.api_title, version="0.1.0")
+
+raw_origins = [origin.strip() for origin in settings.cors_allow_origins.split(",") if origin.strip()]
+allow_all = "*" in raw_origins
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"] if allow_all else raw_origins,
+    allow_credentials=False if allow_all else True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/health")

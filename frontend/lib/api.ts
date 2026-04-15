@@ -12,13 +12,20 @@ export type SimplifyResponse = {
 export async function requestSimplification(reportText: string): Promise<SimplifyResponse> {
   const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
-  const response = await fetch(`${baseUrl}/api/v1/simplify`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ report_text: reportText }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}/api/v1/simplify`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ report_text: reportText }),
+    });
+  } catch {
+    throw new Error(
+      "Failed to fetch backend API. Check NEXT_PUBLIC_API_BASE_URL, backend availability, and CORS settings."
+    );
+  }
 
   if (!response.ok) {
     const payload = await response.json().catch(() => ({ detail: "Request failed." }));

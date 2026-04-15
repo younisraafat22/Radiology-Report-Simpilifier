@@ -12,6 +12,11 @@ Public-facing AI app to simplify de-identified radiology reports into patient-fr
 - `frontend/` Next.js UI.
 - `data/` dataset artifacts for eval.
 
+## New features
+- Image upload OCR in UI (PNG/JPG/WebP) to extract report text using `tesseract.js`.
+- Realistic de-identified sample reports:
+   - `data/samples/realistic_radiology_sample_reports.md`
+
 ## Run backend locally
 1. Create a Python environment.
 2. Install dependencies from `backend/requirements.txt`.
@@ -57,6 +62,7 @@ Public-facing AI app to simplify de-identified radiology reports into patient-fr
       - `fly secrets set HF_MODEL_ID=google/flan-t5-large`
       - `fly secrets set HF_MAX_NEW_TOKENS=400`
       - `fly secrets set HF_TEMPERATURE=0.2`
+      - `fly secrets set CORS_ALLOW_ORIGINS=https://<your-vercel-domain>`
    5. Deploy:
       - `fly deploy`
    6. Verify backend:
@@ -71,6 +77,14 @@ Public-facing AI app to simplify de-identified radiology reports into patient-fr
    5. Verify frontend:
       - Open the Vercel URL and submit a sample report.
    6. If you get 503 in UI, verify Fly secrets are set correctly.
+
+   ## Troubleshooting: Failed to fetch
+   1. Confirm frontend env value:
+      - `NEXT_PUBLIC_API_BASE_URL=https://<your-fly-app>.fly.dev`
+   2. Confirm backend CORS env value:
+      - `CORS_ALLOW_ORIGINS=https://<your-vercel-domain>`
+   3. Confirm backend is healthy:
+      - `https://<your-fly-app>.fly.dev/health`
 
 ## Current API
 - `GET /health`
