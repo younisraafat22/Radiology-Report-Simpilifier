@@ -1,0 +1,39 @@
+from fastapi import FastAPI, HTTPException
+
+from app.config import settings
+from app.schemas import SimplifyRequest, SimplifyResponse
+from app.services.quality import evaluate_output_quality
+from app.services.safety import sanitize_report_text, validate_report_text
+from app.services.simplifier import simplify_report
+
+app = FastAPI(title=settings.api_title, version="0.1.0")
+
+
+@app.get("/health")
+def health() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+@app.post("/api/v1/simplify", response_model=SimplifyResponse)
+def simplify(payload: SimplifyRequest) -> SimplifyResponse:
+    is_valid, reason = validate_report_text(payload.report_text)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=reason)
+
+    sanitized_text = sanitize_report_text(payload.report_text)
+    simplified_text, bullet_points, glossary, confidence, model_source = simplify_report(sanitized_text)
+    quality = evaluate_output_quality(sanitized_text, simplified_text)
+
+    return SimplifyResponse(
+        simplified_report=simplified_text,
+        summary_bullet_points=bullet_points,
+        defined_terms=glossary,
+        confidence_score=confidence,
+        readability_grade_level=quality.readability_grade_level,
+        warnings=quality.warnings,
+        model_source=model_source,
+        disclaimer=(
+            "This simplified summary is for education only and is not medical advice. "
+            "Please discuss your report with your clinician."
+        ),
+    )
