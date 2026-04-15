@@ -13,6 +13,7 @@ def extract_text_from_image(
 ) -> tuple[str, str]:
     token = os.getenv("HF_API_TOKEN", "").strip()
     model_id = os.getenv("HF_IMAGE_TO_TEXT_MODEL_ID", "microsoft/trocr-base-printed").strip()
+    endpoint_url = os.getenv("HF_IMAGE_TO_TEXT_ENDPOINT_URL", "").strip()
 
     if not token:
         raise VLMServiceError("HF_API_TOKEN is required for image text extraction.")
@@ -23,7 +24,7 @@ def extract_text_from_image(
     if not model_id:
         raise VLMServiceError("HF_IMAGE_TO_TEXT_MODEL_ID is required.")
 
-    url = f"https://api-inference.huggingface.co/models/{model_id}"
+    url = endpoint_url or f"https://api-inference.huggingface.co/models/{model_id}"
     with httpx.Client(timeout=75.0) as client:
         headers = {
             "Authorization": f"Bearer {token}",
@@ -32,8 +33,17 @@ def extract_text_from_image(
         response = client.post(url, headers=headers, content=image_bytes)
 
     if response.status_code >= 400:
+        detail = response.text[:300]
+        if (
+            "Model not supported by provider" in detail
+            or "Cannot POST /models/" in detail
+        ):
+            raise VLMServiceError(
+                "Current Hugging Face token/provider does not support this image-to-text route. "
+                "Set HF_IMAGE_TO_TEXT_ENDPOINT_URL to a dedicated HF Inference Endpoint URL for one OCR model."
+            )
         raise VLMServiceError(
-            f"Image-to-text request failed ({model_id}) with status {response.status_code}: {response.text[:300]}"
+            f"Image-to-text request failed ({model_id}) with status {response.status_code}: {detail}"
         )
 
     parsed = response.json()
