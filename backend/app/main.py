@@ -4,7 +4,7 @@ from app.config import settings
 from app.schemas import SimplifyRequest, SimplifyResponse
 from app.services.quality import evaluate_output_quality
 from app.services.safety import sanitize_report_text, validate_report_text
-from app.services.simplifier import simplify_report
+from app.services.simplifier import LLMServiceError, simplify_report
 
 app = FastAPI(title=settings.api_title, version="0.1.0")
 
@@ -21,7 +21,11 @@ def simplify(payload: SimplifyRequest) -> SimplifyResponse:
         raise HTTPException(status_code=400, detail=reason)
 
     sanitized_text = sanitize_report_text(payload.report_text)
-    simplified_text, bullet_points, glossary, confidence, model_source = simplify_report(sanitized_text)
+    try:
+        simplified_text, bullet_points, glossary, confidence, model_source = simplify_report(sanitized_text)
+    except LLMServiceError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
     quality = evaluate_output_quality(sanitized_text, simplified_text)
 
     return SimplifyResponse(
