@@ -101,7 +101,7 @@ export function ReportForm({ onResult }: ReportFormProps) {
         </label>
 
         <label className="label" style={{ marginTop: 8 }}>
-          Extract text from image
+          Image input
         </label>
         <input
           id="reportCamera"
