@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { ClipboardEvent, FormEvent, useState } from "react";
 
 import { requestImageTextExtraction, requestSimplification, SimplifyResponse } from "../lib/api";
 
@@ -21,8 +21,7 @@ export function ReportForm({ onResult }: ReportFormProps) {
   const [errorText, setErrorText] = useState<string | null>(null);
   const [extractStatus, setExtractStatus] = useState<string | null>(null);
 
-  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+  const extractFromImageFile = async (file: File) => {
     if (!file) {
       return;
     }
@@ -49,7 +48,31 @@ export function ReportForm({ onResult }: ReportFormProps) {
       setExtractStatus(null);
     } finally {
       setIsExtracting(false);
-      event.target.value = "";
+    }
+  };
+
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    await extractFromImageFile(file as File);
+    event.target.value = "";
+  };
+
+  const handlePaste = async (event: ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = event.clipboardData?.items;
+    if (!items) {
+      return;
+    }
+
+    for (const item of items) {
+      if (item.type.startsWith("image/")) {
+        const file = item.getAsFile();
+        if (!file) {
+          return;
+        }
+        event.preventDefault();
+        await extractFromImageFile(file);
+        return;
+      }
     }
   };
 
@@ -110,10 +133,15 @@ export function ReportForm({ onResult }: ReportFormProps) {
 
         {extractStatus ? <div className="disclaimer">{extractStatus}</div> : null}
 
+        <div className="disclaimer" style={{ marginTop: 6 }}>
+          You can also paste an image directly with Ctrl+V.
+        </div>
+
         <textarea
           id="reportText"
           value={reportText}
           onChange={(event) => setReportText(event.target.value)}
+          onPaste={handlePaste}
         />
 
         <div className="toolbar">
