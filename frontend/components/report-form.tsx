@@ -1,9 +1,8 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import Tesseract from "tesseract.js";
 
-import { requestSimplification, SimplifyResponse } from "../lib/api";
+import { requestImageTextExtraction, requestSimplification, SimplifyResponse } from "../lib/api";
 
 type ReportFormProps = {
   onResult: (result: SimplifyResponse) => void;
@@ -20,7 +19,7 @@ export function ReportForm({ onResult }: ReportFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
-  const [ocrStatus, setOcrStatus] = useState<string | null>(null);
+  const [extractStatus, setExtractStatus] = useState<string | null>(null);
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -29,31 +28,25 @@ export function ReportForm({ onResult }: ReportFormProps) {
     }
 
     setErrorText(null);
-    setOcrStatus("Extracting text from image...");
+    setExtractStatus("Extracting text from image using VLM...");
     setIsExtracting(true);
 
     try {
-      const preprocessedImage = await preprocessImageForOcr(file);
-      const result = await Tesseract.recognize(preprocessedImage, "eng", {
-        // These parameters work better for report-style scanned pages.
-        tessedit_pageseg_mode: "6",
-        preserve_interword_spaces: "1",
-      } as unknown as Record<string, string>);
-
-      const extractedText = cleanExtractedText(result.data.text);
+      const result = await requestImageTextExtraction(file);
+      const extractedText = result.extracted_text.trim();
 
       if (!extractedText || extractedText.split(/\s+/).length < 15) {
         throw new Error(
-          "OCR could not detect enough readable text. Retake the photo with better lighting and keep the page flat."
+          "Could not detect enough readable text. Retake the photo with better lighting and keep the page flat."
         );
       }
 
       setReportText(extractedText);
-      setOcrStatus("Text extracted successfully. Review it before submitting.");
+      setExtractStatus("Text extracted successfully. Review it before submitting.");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Image OCR failed.";
+      const message = error instanceof Error ? error.message : "Image extraction failed.";
       setErrorText(message);
-      setOcrStatus(null);
+      setExtractStatus(null);
     } finally {
       setIsExtracting(false);
       event.target.value = "";
@@ -85,7 +78,7 @@ export function ReportForm({ onResult }: ReportFormProps) {
         </label>
 
         <label className="label" htmlFor="reportImage" style={{ marginTop: 8 }}>
-          Or upload report image (PNG/JPG) for OCR text extraction
+          Or upload report image (PNG/JPG) for VLM text extraction
         </label>
         <input
           id="reportImage"
@@ -101,7 +94,7 @@ export function ReportForm({ onResult }: ReportFormProps) {
           {isExtracting ? "Extracting from image..." : "Upload or Take Photo"}
         </label>
 
-        {ocrStatus ? <div className="disclaimer">{ocrStatus}</div> : null}
+        {extractStatus ? <div className="disclaimer">{extractStatus}</div> : null}
 
         <textarea
           id="reportText"
@@ -137,80 +130,4 @@ export function ReportForm({ onResult }: ReportFormProps) {
       </form>
     </section>
   );
-}
-
-async function preprocessImageForOcr(file: File): Promise<string> {
-  const originalDataUrl = await readFileAsDataUrl(file);
-  const image = await loadImage(originalDataUrl);
-
-  const canvas = document.createElement("canvas");
-  const context = canvas.getContext("2d");
-
-  if (!context) {
-    return originalDataUrl;
-  }
-
-  // Upscale for small fonts to improve OCR quality.
-  const scale = 2;
-  canvas.width = Math.max(1, Math.floor(image.width * scale));
-  canvas.height = Math.max(1, Math.floor(image.height * scale));
-
-  context.drawImage(image, 0, 0, canvas.width, canvas.height);
-
-  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-  const pixels = imageData.data;
-
-  for (let i = 0; i < pixels.length; i += 4) {
-    const r = pixels[i];
-    const g = pixels[i + 1];
-    const b = pixels[i + 2];
-
-    // Grayscale + moderate contrast stretch.
-    let gray = 0.299 * r + 0.587 * g + 0.114 * b;
-    gray = (gray - 128) * 1.35 + 128;
-
-    // Mild thresholding to reduce noisy backgrounds.
-    const normalized = gray > 165 ? 255 : gray < 85 ? 0 : gray;
-
-    pixels[i] = normalized;
-    pixels[i + 1] = normalized;
-    pixels[i + 2] = normalized;
-  }
-
-  context.putImageData(imageData, 0, 0);
-
-  return canvas.toDataURL("image/png");
-}
-
-function cleanExtractedText(rawText: string): string {
-  const lines = rawText
-    .replace(/\r/g, "")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-  const cleaned = lines.filter((line) => {
-    const lettersOnly = line.replace(/[^A-Za-z]/g, "");
-    return lettersOnly.length >= 3;
-  });
-
-  return cleaned.join("\n").trim();
-}
-
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(new Error("Failed to read image file."));
-    reader.readAsDataURL(file);
-  });
-}
-
-function loadImage(dataUrl: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("Failed to load image for OCR."));
-    image.src = dataUrl;
-  });
 }

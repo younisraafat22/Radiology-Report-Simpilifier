@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.services.simplifier import LLMServiceError
+from app.services.vlm_extractor import VLMServiceError
 
 client = TestClient(app)
 
@@ -42,7 +43,7 @@ def test_simplify_endpoint_success(monkeypatch) -> None:
 
 def test_simplify_endpoint_rejects_short_text() -> None:
     response = client.post("/api/v1/simplify", json={"report_text": "too short"})
-    assert response.status_code == 400
+    assert response.status_code == 422
 
 
 def test_simplify_endpoint_returns_503_on_llm_failure(monkeypatch) -> None:
@@ -56,4 +57,36 @@ def test_simplify_endpoint_returns_503_on_llm_failure(monkeypatch) -> None:
     }
 
     response = client.post("/api/v1/simplify", json=payload)
+    assert response.status_code == 503
+
+
+def test_extract_text_endpoint_success(monkeypatch) -> None:
+    def fake_extract_text(_image_bytes: bytes, _content_type: str):
+        return "EXAM: CT SINUS WO CONTRAST", "huggingface-vlm:test-model"
+
+    monkeypatch.setattr("app.main.extract_text_from_image", fake_extract_text)
+
+    files = {"file": ("report.jpg", b"fake-image-bytes", "image/jpeg")}
+    response = client.post("/api/v1/extract-text", files=files)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["extracted_text"].startswith("EXAM")
+    assert data["model_source"].startswith("huggingface-vlm:")
+
+
+def test_extract_text_endpoint_rejects_non_image() -> None:
+    files = {"file": ("report.txt", b"not-image", "text/plain")}
+    response = client.post("/api/v1/extract-text", files=files)
+    assert response.status_code == 400
+
+
+def test_extract_text_endpoint_returns_503_on_vlm_failure(monkeypatch) -> None:
+    def fake_extract_failure(_image_bytes: bytes, _content_type: str):
+        raise VLMServiceError("HF_API_TOKEN is required for VLM extraction.")
+
+    monkeypatch.setattr("app.main.extract_text_from_image", fake_extract_failure)
+
+    files = {"file": ("report.jpg", b"fake-image-bytes", "image/jpeg")}
+    response = client.post("/api/v1/extract-text", files=files)
     assert response.status_code == 503

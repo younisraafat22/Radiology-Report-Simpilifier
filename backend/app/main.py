@@ -1,11 +1,12 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.schemas import SimplifyRequest, SimplifyResponse
+from app.schemas import ImageExtractResponse, SimplifyRequest, SimplifyResponse
 from app.services.quality import evaluate_output_quality
 from app.services.safety import sanitize_report_text, validate_report_text
 from app.services.simplifier import LLMServiceError, simplify_report
+from app.services.vlm_extractor import VLMServiceError, extract_text_from_image
 
 app = FastAPI(title=settings.api_title, version="0.1.0")
 
@@ -55,3 +56,23 @@ def simplify(payload: SimplifyRequest) -> SimplifyResponse:
             "Please discuss your report with your clinician."
         ),
     )
+
+
+@app.post("/api/v1/extract-text", response_model=ImageExtractResponse)
+async def extract_text(file: UploadFile = File(...)) -> ImageExtractResponse:
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Only image uploads are supported.")
+
+    image_bytes = await file.read()
+    if len(image_bytes) > settings.max_upload_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Image too large. Maximum allowed is {settings.max_upload_bytes // 1000000}MB.",
+        )
+
+    try:
+        extracted_text, model_source = extract_text_from_image(image_bytes, file.content_type)
+    except VLMServiceError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    return ImageExtractResponse(extracted_text=extracted_text, model_source=model_source)

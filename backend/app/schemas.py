@@ -16,3 +16,8 @@ class SimplifyResponse(BaseModel):
     warnings: list[str]
     model_source: str
     disclaimer: str
+
+
+class ImageExtractResponse(BaseModel):
+    extracted_text: str
+    model_source: str
