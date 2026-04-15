@@ -1,5 +1,4 @@
 import os
-from urllib.parse import quote
 
 import httpx
 
@@ -24,8 +23,7 @@ def extract_text_from_image(
     if not model_id:
         raise VLMServiceError("HF_IMAGE_TO_TEXT_MODEL_ID is required.")
 
-    model_path = quote(model_id, safe="")
-    url = f"https://api-inference.huggingface.co/models/{model_path}"
+    url = f"https://router.huggingface.co/hf-inference/models/{model_id}"
     with httpx.Client(timeout=75.0) as client:
         headers = {
             "Authorization": f"Bearer {token}",

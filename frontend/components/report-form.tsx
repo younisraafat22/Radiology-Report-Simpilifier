@@ -28,7 +28,7 @@ export function ReportForm({ onResult }: ReportFormProps) {
     }
 
     setErrorText(null);
-    setExtractStatus("Extracting text from image using VLM...");
+    setExtractStatus("Extracting text from image...");
     setIsExtracting(true);
 
     try {
@@ -78,7 +78,7 @@ export function ReportForm({ onResult }: ReportFormProps) {
         </label>
 
         <label className="label" htmlFor="reportImage" style={{ marginTop: 8 }}>
-          Or upload report image (PNG/JPG) for VLM text extraction
+          Or upload report image (PNG/JPG) for text extraction
         </label>
         <input
           id="reportImage"
