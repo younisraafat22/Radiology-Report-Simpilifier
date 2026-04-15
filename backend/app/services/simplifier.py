@@ -2,6 +2,7 @@ import json
 import os
 import re
 
+import httpx
 from huggingface_hub import InferenceClient
 
 
@@ -20,10 +21,28 @@ def simplify_report(report_text: str) -> tuple[str, list[str], dict[str, str], f
     if not token:
         raise LLMServiceError("HF_API_TOKEN is required for LLM inference.")
 
+    prompt = _build_prompt(report_text)
+
+    # Attempt 1: Router chat completions API (recommended path for hosted public models).
+    router_error = None
+    try:
+        generated = _generate_via_router_chat(
+            token=token,
+            model_id=model_id,
+            prompt=prompt,
+            max_new_tokens=max_new_tokens,
+            temperature=temperature,
+        )
+
+        text, points, glossary, confidence = _parse_model_output(generated, report_text)
+        return text, points, glossary, confidence, f"huggingface-router:{model_id}"
+    except Exception as exc:  # noqa: BLE001
+        router_error = f"router chat failed ({type(exc).__name__}: {exc})"
+
+    # Attempt 2: Classic inference API text_generation (still LLM-only, different transport).
+    inference_error = None
     try:
         client = InferenceClient(model=model_id, token=token)
-        prompt = _build_prompt(report_text)
-
         generated = client.text_generation(
             prompt,
             max_new_tokens=max_new_tokens,
@@ -32,13 +51,65 @@ def simplify_report(report_text: str) -> tuple[str, list[str], dict[str, str], f
         )
 
         text, points, glossary, confidence = _parse_model_output(generated, report_text)
-        return text, points, glossary, confidence, f"huggingface:{model_id}"
-    except LLMServiceError:
-        raise
-    except Exception as exc:
+        return text, points, glossary, confidence, f"huggingface-inference:{model_id}"
+    except Exception as exc:  # noqa: BLE001
+        inference_error = f"inference endpoint failed ({type(exc).__name__}: {exc})"
+
+    raise LLMServiceError(
+        "LLM inference request failed. "
+        f"{router_error}. "
+        f"{inference_error}."
+    )
+
+
+def _generate_via_router_chat(
+    token: str,
+    model_id: str,
+    prompt: str,
+    max_new_tokens: int,
+    temperature: float,
+) -> str:
+    url = "https://router.huggingface.co/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+
+    payload = {
+        "model": model_id,
+        "messages": [
+            {
+                "role": "system",
+                "content": "You must return only strict JSON and no markdown.",
+            },
+            {
+                "role": "user",
+                "content": prompt,
+            },
+        ],
+        "temperature": temperature,
+        "max_tokens": max_new_tokens,
+    }
+
+    with httpx.Client(timeout=60.0) as client:
+        response = client.post(url, headers=headers, json=payload)
+
+    if response.status_code >= 400:
         raise LLMServiceError(
-            f"LLM inference request failed: {type(exc).__name__}: {exc}"
-        ) from exc
+            f"router returned {response.status_code}: {response.text[:400]}"
+        )
+
+    data = response.json()
+    choices = data.get("choices", [])
+    if not choices:
+        raise LLMServiceError("router response missing choices")
+
+    message = choices[0].get("message", {})
+    content = message.get("content", "")
+    if not content:
+        raise LLMServiceError("router response missing message content")
+
+    return str(content)
 
 
 def _build_prompt(report_text: str) -> str:

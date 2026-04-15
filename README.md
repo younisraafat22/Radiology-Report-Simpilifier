@@ -59,7 +59,7 @@ Public-facing AI app to simplify de-identified radiology reports into patient-fr
       - `fly launch --no-deploy`
    4. Set required LLM secrets:
       - `fly secrets set HF_API_TOKEN=...`
-      - `fly secrets set HF_MODEL_ID=Qwen/Qwen2.5-3B-Instruct`
+      - `fly secrets set HF_MODEL_ID=meta-llama/Llama-3.1-8B-Instruct`
       - `fly secrets set HF_MAX_NEW_TOKENS=400`
       - `fly secrets set HF_TEMPERATURE=0.2`
       - `fly secrets set CORS_ALLOW_ORIGINS=https://<your-vercel-domain>`
@@ -80,7 +80,8 @@ Public-facing AI app to simplify de-identified radiology reports into patient-fr
 
    ### 503: LLM inference request failed
    1. Confirm `HF_API_TOKEN` is valid and has Inference permission.
-   2. Confirm selected model works with text generation (recommended: `Qwen/Qwen2.5-3B-Instruct`).
+   2. Confirm selected model is available on Hugging Face router or inference endpoints.
+   3. Backend now tries router chat-completions first, then classic inference endpoint.
    3. Open Fly logs and inspect the exact backend error message.
 
    ## Troubleshooting: Failed to fetch
