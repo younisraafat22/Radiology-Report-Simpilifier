@@ -23,7 +23,7 @@ export async function requestSimplification(reportText: string): Promise<Simplif
     });
   } catch {
     throw new Error(
-      "Failed to fetch backend API. Check NEXT_PUBLIC_API_BASE_URL, backend availability, and CORS settings."
+      `Failed to fetch backend API at ${baseUrl}. Check NEXT_PUBLIC_API_BASE_URL, backend availability, and CORS settings.`
     );
   }
 

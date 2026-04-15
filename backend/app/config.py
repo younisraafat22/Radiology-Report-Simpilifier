@@ -12,6 +12,7 @@ class Settings:
     api_title: str = os.getenv("API_TITLE", "Radiology Report Simplifier API")
     max_report_chars: int = int(os.getenv("MAX_REPORT_CHARS", "6000"))
     cors_allow_origins: str = os.getenv("CORS_ALLOW_ORIGINS", "*")
+    cors_allow_origin_regex: str = os.getenv("CORS_ALLOW_ORIGIN_REGEX", "")
 
 
 settings = Settings()
