@@ -33,11 +33,19 @@ export function ReportForm({ onResult }: ReportFormProps) {
     setIsExtracting(true);
 
     try {
-      const result = await Tesseract.recognize(file, "eng");
-      const extractedText = result.data.text.trim();
+      const preprocessedImage = await preprocessImageForOcr(file);
+      const result = await Tesseract.recognize(preprocessedImage, "eng", {
+        // These parameters work better for report-style scanned pages.
+        tessedit_pageseg_mode: "6",
+        preserve_interword_spaces: "1",
+      } as unknown as Record<string, string>);
 
-      if (!extractedText) {
-        throw new Error("No readable text was detected in this image.");
+      const extractedText = cleanExtractedText(result.data.text);
+
+      if (!extractedText || extractedText.split(/\s+/).length < 15) {
+        throw new Error(
+          "OCR could not detect enough readable text. Retake the photo with better lighting and keep the page flat."
+        );
       }
 
       setReportText(extractedText);
@@ -129,4 +137,80 @@ export function ReportForm({ onResult }: ReportFormProps) {
       </form>
     </section>
   );
+}
+
+async function preprocessImageForOcr(file: File): Promise<string> {
+  const originalDataUrl = await readFileAsDataUrl(file);
+  const image = await loadImage(originalDataUrl);
+
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    return originalDataUrl;
+  }
+
+  // Upscale for small fonts to improve OCR quality.
+  const scale = 2;
+  canvas.width = Math.max(1, Math.floor(image.width * scale));
+  canvas.height = Math.max(1, Math.floor(image.height * scale));
+
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+  const pixels = imageData.data;
+
+  for (let i = 0; i < pixels.length; i += 4) {
+    const r = pixels[i];
+    const g = pixels[i + 1];
+    const b = pixels[i + 2];
+
+    // Grayscale + moderate contrast stretch.
+    let gray = 0.299 * r + 0.587 * g + 0.114 * b;
+    gray = (gray - 128) * 1.35 + 128;
+
+    // Mild thresholding to reduce noisy backgrounds.
+    const normalized = gray > 165 ? 255 : gray < 85 ? 0 : gray;
+
+    pixels[i] = normalized;
+    pixels[i + 1] = normalized;
+    pixels[i + 2] = normalized;
+  }
+
+  context.putImageData(imageData, 0, 0);
+
+  return canvas.toDataURL("image/png");
+}
+
+function cleanExtractedText(rawText: string): string {
+  const lines = rawText
+    .replace(/\r/g, "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const cleaned = lines.filter((line) => {
+    const lettersOnly = line.replace(/[^A-Za-z]/g, "");
+    return lettersOnly.length >= 3;
+  });
+
+  return cleaned.join("\n").trim();
+}
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Failed to read image file."));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImage(dataUrl: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Failed to load image for OCR."));
+    image.src = dataUrl;
+  });
 }
