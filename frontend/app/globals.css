@@ -114,6 +114,27 @@ textarea:focus {
   flex-wrap: wrap;
 }
 
+.file-input-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.upload-button {
+  display: inline-block;
+  margin-bottom: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 14px;
+  background: #ece3d6;
+  color: var(--text);
+  font-family: var(--font-display), Arial, sans-serif;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
 button {
   border: none;
   border-radius: 10px;

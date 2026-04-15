@@ -81,11 +81,17 @@ export function ReportForm({ onResult }: ReportFormProps) {
         </label>
         <input
           id="reportImage"
+          className="file-input-hidden"
           type="file"
           accept="image/png,image/jpeg,image/jpg,image/webp"
+          capture="environment"
           onChange={handleImageUpload}
           disabled={isExtracting || isSubmitting}
         />
+
+        <label className="upload-button" htmlFor="reportImage">
+          {isExtracting ? "Extracting from image..." : "Upload or Take Photo"}
+        </label>
 
         {ocrStatus ? <div className="disclaimer">{ocrStatus}</div> : null}
 

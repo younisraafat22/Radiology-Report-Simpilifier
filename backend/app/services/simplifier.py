@@ -3,7 +3,6 @@ import os
 import re
 
 import httpx
-from huggingface_hub import InferenceClient
 
 
 class LLMServiceError(RuntimeError):
@@ -11,7 +10,7 @@ class LLMServiceError(RuntimeError):
 
 
 def simplify_report(report_text: str) -> tuple[str, list[str], dict[str, str], float, str]:
-    """Generate patient-friendly simplification using an LLM only."""
+    """Generate patient-friendly simplification using Hugging Face router chat."""
 
     token = os.getenv("HF_API_TOKEN", "").strip()
     model_id = os.getenv("HF_MODEL_ID", "google/flan-t5-large")
@@ -23,8 +22,6 @@ def simplify_report(report_text: str) -> tuple[str, list[str], dict[str, str], f
 
     prompt = _build_prompt(report_text)
 
-    # Attempt 1: Router chat completions API (recommended path for hosted public models).
-    router_error = None
     try:
         generated = _generate_via_router_chat(
             token=token,
@@ -35,31 +32,12 @@ def simplify_report(report_text: str) -> tuple[str, list[str], dict[str, str], f
         )
 
         text, points, glossary, confidence = _parse_model_output(generated, report_text)
+        text, points = _preserve_critical_negatives(report_text, text, points)
         return text, points, glossary, confidence, f"huggingface-router:{model_id}"
     except Exception as exc:  # noqa: BLE001
-        router_error = f"router chat failed ({type(exc).__name__}: {exc})"
-
-    # Attempt 2: Classic inference API text_generation (still LLM-only, different transport).
-    inference_error = None
-    try:
-        client = InferenceClient(model=model_id, token=token)
-        generated = client.text_generation(
-            prompt,
-            max_new_tokens=max_new_tokens,
-            temperature=temperature,
-            return_full_text=False,
-        )
-
-        text, points, glossary, confidence = _parse_model_output(generated, report_text)
-        return text, points, glossary, confidence, f"huggingface-inference:{model_id}"
-    except Exception as exc:  # noqa: BLE001
-        inference_error = f"inference endpoint failed ({type(exc).__name__}: {exc})"
-
-    raise LLMServiceError(
-        "LLM inference request failed. "
-        f"{router_error}. "
-        f"{inference_error}."
-    )
+        raise LLMServiceError(
+            f"LLM inference request failed: router chat failed ({type(exc).__name__}: {exc})"
+        ) from exc
 
 
 def _generate_via_router_chat(
@@ -116,6 +94,7 @@ def _build_prompt(report_text: str) -> str:
     return (
         "You are a medical language simplification assistant. "
         "Convert the radiology report into patient-friendly language without adding findings. "
+        "Preserve critical negative findings exactly (for example: no pneumothorax, no pleural effusion). "
         "Preserve uncertainty words like 'possible' or 'cannot exclude'. "
         "Return only valid JSON with this schema: "
         "{\"simplified_report\": string, \"summary_bullet_points\": [string], "
@@ -127,7 +106,7 @@ def _build_prompt(report_text: str) -> str:
 
 def _parse_model_output(
     model_text: str,
-    source_report: str,
+    _source_report: str,
 ) -> tuple[str, list[str], dict[str, str], float]:
     json_blob = _extract_first_json_object(model_text)
 
@@ -173,6 +152,34 @@ def _parse_model_output(
         raise LLMServiceError("Model output defined_terms is empty.")
 
     return simplified_report, bullet_points[:5], defined_terms, confidence
+
+
+def _preserve_critical_negatives(
+    source_report: str,
+    simplified_report: str,
+    bullet_points: list[str],
+) -> tuple[str, list[str]]:
+    critical_negatives = [
+        "no pneumothorax",
+        "no pleural effusion",
+        "no focal consolidation",
+        "no acute cardiopulmonary process",
+    ]
+
+    source_lower = source_report.lower()
+    simplified_lower = simplified_report.lower()
+
+    missing = [term for term in critical_negatives if term in source_lower and term not in simplified_lower]
+    if not missing:
+        return simplified_report, bullet_points
+
+    summary = "Important negative findings: " + ", ".join(missing) + "."
+    updated_text = simplified_report.strip() + " " + summary
+
+    updated_points = list(bullet_points)
+    updated_points.append(summary)
+
+    return updated_text, updated_points[:5]
 
 
 def _extract_first_json_object(text: str) -> str | None:
