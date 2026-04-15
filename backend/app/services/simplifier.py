@@ -36,7 +36,9 @@ def simplify_report(report_text: str) -> tuple[str, list[str], dict[str, str], f
     except LLMServiceError:
         raise
     except Exception as exc:
-        raise LLMServiceError("LLM inference request failed.") from exc
+        raise LLMServiceError(
+            f"LLM inference request failed: {type(exc).__name__}: {exc}"
+        ) from exc
 
 
 def _build_prompt(report_text: str) -> str:
