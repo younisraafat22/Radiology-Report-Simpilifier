@@ -15,7 +15,7 @@ const secondSampleReport =
   "EXAM: CHEST X-RAY 2 VIEWS\nINDICATION: Fever and cough\nFINDINGS: Patchy right lower lobe airspace opacity may represent early infiltrate. Trace bilateral pleural effusions. Heart size upper limits of normal.\nIMPRESSION: Right basilar opacity, correlate clinically for early pneumonia. Trace pleural effusions.";
 
 export function ReportForm({ onResult }: ReportFormProps) {
-  const [reportText, setReportText] = useState(sampleReport);
+  const [reportText, setReportText] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
@@ -77,22 +77,36 @@ export function ReportForm({ onResult }: ReportFormProps) {
           Paste de-identified radiology report
         </label>
 
-        <label className="label" htmlFor="reportImage" style={{ marginTop: 8 }}>
-          Or upload report image (PNG/JPG) for text extraction
+        <label className="label" style={{ marginTop: 8 }}>
+          Extract text from image
         </label>
         <input
-          id="reportImage"
+          id="reportCamera"
           className="file-input-hidden"
           type="file"
-          accept="image/png,image/jpeg,image/jpg,image/webp"
+          accept="image/*"
           capture="environment"
           onChange={handleImageUpload}
           disabled={isExtracting || isSubmitting}
         />
 
-        <label className="upload-button" htmlFor="reportImage">
-          {isExtracting ? "Extracting from image..." : "Upload or Take Photo"}
-        </label>
+        <input
+          id="reportUpload"
+          className="file-input-hidden"
+          type="file"
+          accept="image/png,image/jpeg,image/jpg,image/webp"
+          onChange={handleImageUpload}
+          disabled={isExtracting || isSubmitting}
+        />
+
+        <div className="toolbar" style={{ marginTop: 0, marginBottom: 10 }}>
+          <label className="upload-button" htmlFor="reportCamera" aria-disabled={isExtracting || isSubmitting}>
+            {isExtracting ? "Extracting..." : "Open Camera"}
+          </label>
+          <label className="upload-button" htmlFor="reportUpload" aria-disabled={isExtracting || isSubmitting}>
+            {isExtracting ? "Extracting..." : "Upload Image"}
+          </label>
+        </div>
 
         {extractStatus ? <div className="disclaimer">{extractStatus}</div> : null}
 

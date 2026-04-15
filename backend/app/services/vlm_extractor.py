@@ -1,6 +1,8 @@
 import os
+from io import BytesIO
 
-import httpx
+from PIL import Image
+import pytesseract
 
 
 class VLMServiceError(RuntimeError):
@@ -9,64 +11,23 @@ class VLMServiceError(RuntimeError):
 
 def extract_text_from_image(
     image_bytes: bytes,
-    content_type: str,
+    _content_type: str,
 ) -> tuple[str, str]:
-    token = os.getenv("HF_API_TOKEN", "").strip()
-    model_id = os.getenv("HF_IMAGE_TO_TEXT_MODEL_ID", "microsoft/trocr-base-printed").strip()
-    endpoint_url = os.getenv("HF_IMAGE_TO_TEXT_ENDPOINT_URL", "").strip()
-
-    if not token:
-        raise VLMServiceError("HF_API_TOKEN is required for image text extraction.")
+    ocr_lang = os.getenv("OCR_LANG", "eng").strip() or "eng"
 
     if not image_bytes:
         raise VLMServiceError("Image payload is empty.")
 
-    if not model_id:
-        raise VLMServiceError("HF_IMAGE_TO_TEXT_MODEL_ID is required.")
+    try:
+        image = Image.open(BytesIO(image_bytes))
+    except Exception as exc:  # noqa: BLE001
+        raise VLMServiceError("Failed to decode image data.") from exc
 
-    url = endpoint_url or f"https://api-inference.huggingface.co/models/{model_id}"
-    with httpx.Client(timeout=75.0) as client:
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": content_type,
-        }
-        response = client.post(url, headers=headers, content=image_bytes)
+    if image.mode != "RGB":
+        image = image.convert("RGB")
 
-    if response.status_code >= 400:
-        detail = response.text[:300]
-        if (
-            "Model not supported by provider" in detail
-            or "Cannot POST /models/" in detail
-        ):
-            raise VLMServiceError(
-                "Current Hugging Face token/provider does not support this image-to-text route. "
-                "Set HF_IMAGE_TO_TEXT_ENDPOINT_URL to a dedicated HF Inference Endpoint URL for one OCR model."
-            )
-        raise VLMServiceError(
-            f"Image-to-text request failed ({model_id}) with status {response.status_code}: {detail}"
-        )
-
-    parsed = response.json()
-    text = _extract_text_from_inference_payload(parsed)
+    text = pytesseract.image_to_string(image, lang=ocr_lang).strip()
     if not text:
-        raise VLMServiceError(f"Image-to-text model returned empty text ({model_id}).")
+        raise VLMServiceError("OCR returned empty text. Try a clearer image.")
 
-    return text, f"huggingface-image-to-text:{model_id}"
-
-
-def _extract_text_from_inference_payload(payload: object) -> str:
-    if isinstance(payload, list):
-        parts = []
-        for item in payload:
-            if isinstance(item, dict):
-                text = str(item.get("generated_text", "")).strip()
-                if text:
-                    parts.append(text)
-        return "\n".join(parts).strip()
-
-    if isinstance(payload, dict):
-        generated = str(payload.get("generated_text", "")).strip()
-        if generated:
-            return generated
-
-    return ""
+    return text, f"tesseract:{ocr_lang}"
